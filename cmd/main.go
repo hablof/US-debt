@@ -2,6 +2,11 @@ package main
 
 import (
 	"fmt"
+	"image/png"
+	"os"
+
+	imgmerge "github.com/hablof/US-debt/img_merge"
+	// gim "github.com/ozankasikci/go-image-merge"
 )
 
 const (
@@ -9,6 +14,35 @@ const (
 )
 
 func main() {
+
+	grids := []*imgmerge.Grid{
+		{ImageFilePath: "static/1.png"},
+		{ImageFilePath: "static/0.png"},
+		{ImageFilePath: "static/0.png"},
+		{ImageFilePath: "static/_.png"},
+		{ImageFilePath: "static/5.png"},
+		{ImageFilePath: "static/0.png"},
+		{ImageFilePath: "static/0.png"},
+	}
+
+	rgba, err := imgmerge.New(grids).Merge()
+	if err != nil {
+		fmt.Println("aaaaaaaaaaaaaa")
+		return
+	}
+
+	file, err := os.Create("output.png")
+	if err != nil {
+		fmt.Println("aaaaaaaaaaaaaa")
+		return
+	}
+	defer file.Close()
+
+	err = png.Encode(file, rgba)
+	if err != nil {
+		fmt.Println("aaaaaaaaaaaaaa")
+		return
+	}
 	// img, err := imgio.Open("input.png")
 	// if err != nil {
 	// 	fmt.Println(err)
@@ -22,7 +56,7 @@ func main() {
 	// 	return
 	// }
 
-	fmt.Println(intToSpStr(debt))
+	// fmt.Println(intToSpStr(debt))
 
 }
 
