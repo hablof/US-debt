@@ -2,62 +2,82 @@ package main
 
 import (
 	"fmt"
-	"image/png"
-	"os"
+	"image"
+	"image/draw"
 
+	"github.com/anthonynsimon/bild/clone"
+	"github.com/anthonynsimon/bild/imgio"
+	"github.com/anthonynsimon/bild/transform"
 	imgmerge "github.com/hablof/US-debt/img_merge"
 	// gim "github.com/ozankasikci/go-image-merge"
 )
 
+var (
+	runeToImg map[rune]string = map[rune]string{
+		'0': "static/0.png",
+		'1': "static/1.png",
+		'2': "static/2.png",
+		'3': "static/3.png",
+		'4': "static/4.png",
+		'5': "static/5.png",
+		'6': "static/6.png",
+		'7': "static/7.png",
+		'8': "static/8.png",
+		'9': "static/9.png",
+		'_': "static/_.png",
+		'$': "static/$.png",
+	}
+)
+
 const (
-	debt = 1_023_456_789
+	debt = 31462676535393
+
+	captionWidth = 730
+	captionHidth = 70
+
+	verticalAngle   = -5
+	horizontalAngle = 4
 )
 
 func main() {
 
-	grids := []*imgmerge.Grid{
-		{ImageFilePath: "static/1.png"},
-		{ImageFilePath: "static/0.png"},
-		{ImageFilePath: "static/0.png"},
-		{ImageFilePath: "static/_.png"},
-		{ImageFilePath: "static/5.png"},
-		{ImageFilePath: "static/0.png"},
-		{ImageFilePath: "static/0.png"},
-	}
-
-	rgba, err := imgmerge.New(grids).Merge()
+	caption, err := strToRGBA(intToSpStr(debt))
 	if err != nil {
-		fmt.Println("aaaaaaaaaaaaaa")
+		fmt.Println("cannot str to rgba", err)
 		return
 	}
 
-	file, err := os.Create("output.png")
+	caption = transform.Resize(caption, captionWidth, captionHidth, transform.Lanczos)
+
+	caption = transform.ShearH(transform.ShearV(caption, verticalAngle), horizontalAngle)
+
+	template, err := imgio.Open("static/template.png")
 	if err != nil {
-		fmt.Println("aaaaaaaaaaaaaa")
+		fmt.Println(err)
 		return
 	}
-	defer file.Close()
 
-	err = png.Encode(file, rgba)
-	if err != nil {
-		fmt.Println("aaaaaaaaaaaaaa")
+	templateRGBA := clone.AsShallowRGBA(template)
+
+	draw.Draw(templateRGBA, templateRGBA.Bounds(), caption, image.Point{-100, -265}, draw.Over)
+
+	if err := imgio.Save("output.png", templateRGBA, imgio.PNGEncoder()); err != nil {
+		fmt.Println(err)
 		return
 	}
-	// img, err := imgio.Open("input.png")
-	// if err != nil {
-	// 	fmt.Println(err)
-	// 	return
-	// }
 
-	// result := transform.ShearH(transform.ShearV(img, -5), 8)
+}
 
-	// if err := imgio.Save("output.png", result, imgio.PNGEncoder()); err != nil {
-	// 	fmt.Println(err)
-	// 	return
-	// }
+func strToRGBA(str string) (*image.RGBA, error) {
+	g := make([]*imgmerge.Grid, 0, len(str))
 
-	// fmt.Println(intToSpStr(debt))
+	for _, r := range str {
+		g = append(g, &imgmerge.Grid{
+			ImageFilePath: runeToImg[r],
+		})
+	}
 
+	return imgmerge.New(g).Merge()
 }
 
 func intToSpStr(debt uint64) string {
@@ -66,7 +86,7 @@ func intToSpStr(debt uint64) string {
 
 	for i := range outSlice {
 		if (i+1)%4 == 0 {
-			outSlice[i] = ' '
+			outSlice[i] = '_'
 			continue
 		}
 
@@ -81,7 +101,7 @@ func intToSpStr(debt uint64) string {
 		outSlice[i], outSlice[l-i-1] = outSlice[l-i-1], outSlice[i]
 	}
 
-	return string(outSlice)
+	return "$__" + string(outSlice)
 }
 
 func lenLoop(i uint64) int {
