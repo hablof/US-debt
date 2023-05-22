@@ -2,6 +2,10 @@ package main
 
 import (
 	"fmt"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
 
 	"github.com/hablof/US-debt/cache"
 	debtseeker "github.com/hablof/US-debt/debt_seeker"
@@ -22,5 +26,21 @@ func main() {
 
 	s := service.NewService(myBot, seeker, cache.Cache{}, imggen.ImageGenerator{})
 
-	fmt.Printf("s.Job(): %v\n", s.Job())
+	s.Job()
+
+	intertuptCh := make(chan os.Signal, 1)
+	signal.Notify(intertuptCh, syscall.SIGINT, syscall.SIGTERM)
+
+	ticker := time.NewTicker(4 * time.Hour)
+
+jobLoop:
+	for {
+		select {
+		case <-ticker.C:
+			s.Job()
+
+		case <-intertuptCh:
+			break jobLoop
+		}
+	}
 }
