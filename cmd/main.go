@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 
+	"github.com/hablof/US-debt/cache"
 	debtseeker "github.com/hablof/US-debt/debt_seeker"
 	imggenerator "github.com/hablof/US-debt/img_generator"
 )
@@ -14,21 +15,45 @@ import (
 func main() {
 
 	seeker := debtseeker.NewSeeker()
-	debt, err := seeker.GetData()
+	dataSample, err := seeker.GetData()
 	if err != nil {
-		fmt.Println("жаль")
+		fmt.Println("жаль", err)
 		return
 	}
 
-	fmt.Println(debt.GetDate())
-	u, err := debt.GetDebt()
+	debtValue, err := dataSample.GetDebt()
 	if err != nil {
-		fmt.Println("жаль 2")
+		fmt.Println("жаль 2", err)
 		return
 	}
 
-	if err := imggenerator.GenerateImage(u); err != nil {
-		fmt.Println("error occured:", err)
+	debtDate, err := dataSample.GetDate()
+	if err != nil {
+		fmt.Println("жаль 3", err)
+		return
+	}
+
+	isNewer, err := cache.IsDateNewer(debtDate)
+	switch {
+	case isNewer:
+		fmt.Println("дата обновилась!")
+
+	case err != nil:
+		fmt.Println("не удалось проверить дату!", err)
+
+	default:
+		fmt.Println("дата не обновилась: не будем ничего делать")
+		return
+	}
+
+	if err := imggenerator.GenerateImage(debtValue); err != nil {
+		fmt.Println("img generation error occured:", err)
+		return
+	}
+
+	if err := cache.UpdateDate(debtDate); err != nil {
+		fmt.Println("updating date error occured:", err)
+		return
 	}
 
 }
