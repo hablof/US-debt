@@ -11,7 +11,10 @@ const (
 	dateLayout   = "2006-01-02"
 )
 
-func IsDateNewer(date time.Time) (bool, error) {
+type Cache struct {
+}
+
+func (Cache) IsDateNewer(date time.Time) (bool, error) {
 	dateFile, err := os.Open(dateFilename)
 	if err != nil {
 		return false, err
@@ -31,7 +34,7 @@ func IsDateNewer(date time.Time) (bool, error) {
 	return date.After(lastDate), nil
 }
 
-func UpdateDate(date time.Time) error {
+func (Cache) UpdateDate(date time.Time) error {
 	b := []byte(date.Format(dateLayout))
 	return os.WriteFile(dateFilename, b, 0666)
 }

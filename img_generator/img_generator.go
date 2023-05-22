@@ -38,8 +38,10 @@ const (
 	horizontalAngle = 4
 )
 
-// "output.png"
-func GenerateImage(debt uint64) error {
+type ImageGenerator struct {
+}
+
+func (ImageGenerator) GenerateImage(debt uint64, imgFilename string) error {
 	caption, err := strToRGBA(intToSpStr(debt))
 	if err != nil {
 		fmt.Println("cannot str to rgba", err)
@@ -60,7 +62,7 @@ func GenerateImage(debt uint64) error {
 
 	draw.Draw(templateRGBA, templateRGBA.Bounds(), caption, image.Point{-100, -265}, draw.Over)
 
-	if err := imgio.Save("output.png", templateRGBA, imgio.PNGEncoder()); err != nil {
+	if err := imgio.Save(imgFilename, templateRGBA, imgio.PNGEncoder()); err != nil {
 		fmt.Println(err)
 		return err
 	}

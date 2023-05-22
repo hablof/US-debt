@@ -42,13 +42,6 @@ func New(row []*Grid, opts ...func(*MergeImage)) *MergeImage {
 	return mi
 }
 
-// OptBaseDir is an functional option to set the BaseDir field
-func OptBaseDir(dir string) func(*MergeImage) {
-	return func(mi *MergeImage) {
-		mi.BaseDir = dir
-	}
-}
-
 func (m *MergeImage) readGridImage(grid *Grid) (image.Image, error) {
 	imgPath := grid.ImageFilePath
 
@@ -56,7 +49,7 @@ func (m *MergeImage) readGridImage(grid *Grid) (image.Image, error) {
 		imgPath = path.Join(m.BaseDir, grid.ImageFilePath)
 	}
 
-	return m.ReadImageFile(imgPath)
+	return m.readImageFile(imgPath)
 }
 
 func (m *MergeImage) readGridsImages() ([]image.Image, error) {
@@ -74,7 +67,7 @@ func (m *MergeImage) readGridsImages() ([]image.Image, error) {
 	return images, nil
 }
 
-func (m *MergeImage) ReadImageFile(path string) (image.Image, error) {
+func (m *MergeImage) readImageFile(path string) (image.Image, error) {
 	absPath, err := filepath.Abs(path)
 	if err != nil {
 		return nil, err

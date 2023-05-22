@@ -16,22 +16,30 @@ const (
 	rawParams          = "fields=tot_pub_debt_out_amt,record_date&filter=record_date:lte:2023-05-19&sort=-record_date&page[size]=1"
 )
 
-type DataRecord struct {
+type dataRecord struct {
 	TotalDebt  string `json:"tot_pub_debt_out_amt"`
 	RecordDate string `json:"record_date"`
 }
 
-func (dr DataRecord) GetDebt() (uint64, error) {
+func (dr *dataRecord) getDebt() (uint64, error) {
+	if dr == nil {
+		return 0, fmt.Errorf("empty data")
+	}
+
 	u, err := strconv.ParseUint(strings.Split(dr.TotalDebt, ".")[0], 10, 64)
 	return uint64(u), err
 }
 
-func (dr DataRecord) GetDate() (time.Time, error) {
+func (dr *dataRecord) getDate() (time.Time, error) {
+	if dr == nil {
+		return time.Time{}, fmt.Errorf("empty data")
+	}
+
 	return time.Parse("2006-01-02", dr.RecordDate)
 }
 
 type endpointOutputScheme struct {
-	Data []DataRecord `json:"data"`
+	Data []dataRecord `json:"data"`
 }
 
 // var (
@@ -44,23 +52,27 @@ type endpointOutputScheme struct {
 // )
 
 type DebtSeeker struct {
-	c *http.Client
+	c        *http.Client
+	tempData *dataRecord
 }
 
 func NewSeeker() *DebtSeeker {
 	c := http.Client{Timeout: 5 * time.Second}
 
-	return &DebtSeeker{&c}
+	return &DebtSeeker{
+		c:        &c,
+		tempData: nil,
+	}
 }
 
-func (ds *DebtSeeker) GetData() (DataRecord, error) {
+func (ds *DebtSeeker) FetchData() error {
 
 	ctx, cf := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cf()
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, usTreasuryEndpoint, nil)
 	if err != nil {
-		return DataRecord{}, err
+		return err
 	}
 
 	req.URL.RawQuery = rawParams
@@ -68,23 +80,35 @@ func (ds *DebtSeeker) GetData() (DataRecord, error) {
 
 	resp, err := ds.c.Do(req)
 	if err != nil {
-		return DataRecord{}, err
+		return err
 	}
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return DataRecord{}, err
+		return err
 	}
 	defer resp.Body.Close()
 
 	var dataSample endpointOutputScheme
 	if err := json.Unmarshal(body, &dataSample); err != nil {
-		return DataRecord{}, err
+		return err
 	}
 
 	if len(dataSample.Data) == 0 {
-		return DataRecord{}, fmt.Errorf("no data in response")
+		return fmt.Errorf("no data in response")
 	}
 
-	return dataSample.Data[0], nil
+	ds.tempData = &dataSample.Data[0]
+
+	return nil
+}
+
+func (ds *DebtSeeker) GetDebt() (uint64, error) {
+
+	return ds.tempData.getDebt()
+}
+
+func (ds *DebtSeeker) GetDate() (time.Time, error) {
+
+	return ds.tempData.getDate()
 }
