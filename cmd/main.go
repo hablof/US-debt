@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"os/signal"
 	"syscall"
@@ -12,6 +13,10 @@ import (
 	imggen "github.com/hablof/US-debt/img_generator"
 	"github.com/hablof/US-debt/service"
 	"github.com/hablof/US-debt/tgbot"
+)
+
+const (
+	interval = 4 * time.Hour
 )
 
 func main() {
@@ -31,13 +36,15 @@ func main() {
 	intertuptCh := make(chan os.Signal, 1)
 	signal.Notify(intertuptCh, syscall.SIGINT, syscall.SIGTERM)
 
-	ticker := time.NewTicker(4 * time.Hour)
+	ticker := time.NewTicker(interval)
+	log.Println("следующая попытка в", time.Now().Add(interval).Format("15:04"))
 
 jobLoop:
 	for {
 		select {
 		case <-ticker.C:
 			s.Job()
+			log.Println("следующая попытка в", time.Now().Add(interval).Format("15:04"))
 
 		case <-intertuptCh:
 			break jobLoop

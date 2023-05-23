@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"log"
 	"time"
+
+	"github.com/hablof/US-debt/model"
 )
 
 const (
@@ -11,13 +13,14 @@ const (
 )
 
 type Telegram interface {
-	SendDebtImg(path string) error
+	SendDebtImg(path string, diffInfo model.DebtDifference) error
 	Log(message string) error
 }
 
 type Cache interface {
-	IsDateNewer(date time.Time) (bool, error)
-	UpdateDate(date time.Time) error
+	GetData() (uint64, time.Time, error)
+	UpdateData(debt uint64, date time.Time) error
+	Erase() error
 }
 
 type DebtSeeker interface {
@@ -51,53 +54,73 @@ func (s *Service) Job() error {
 	if err := s.ds.FetchData(); err != nil {
 		log.Println("жаль", err)
 		s.tgbot.Log(err.Error())
+
 		return err
 	}
 
-	debtValue, err := s.ds.GetDebt()
+	newDebt, err := s.ds.GetDebt()
 	if err != nil {
 		log.Println("жаль 2", err)
 		s.tgbot.Log(err.Error())
+
 		return err
 	}
 
-	debtDate, err := s.ds.GetDate()
+	newDate, err := s.ds.GetDate()
 	if err != nil {
 		log.Println("жаль 3", err)
 		s.tgbot.Log(err.Error())
+
 		return err
 	}
 
-	isNewer, err := s.cache.IsDateNewer(debtDate)
-	switch {
-	case isNewer:
-		log.Println("дата обновилась!")
+	diffInfo := model.DebtDifference{}
 
-	case err != nil:
-		log.Println("не удалось проверить дату!", err)
-		s.tgbot.Log(err.Error())
+	cachedDebt, cachedDate, cacheErr := s.cache.GetData()
+	switch {
+	case cacheErr != nil:
+		log.Println("не удалось проверить дату!", cacheErr)
+		s.tgbot.Log(cacheErr.Error())
+		diffInfo.Valid = false
+		s.cache.Erase()
+
+	case newDate.After(cachedDate):
+		log.Println("дата обновилась!")
+		diffInfo.Valid = true
+		if newDebt > cachedDebt {
+			diffInfo.Grows = true
+			diffInfo.Value = newDebt - cachedDebt
+		} else {
+			diffInfo.Grows = false
+			diffInfo.Value = cachedDebt - newDebt
+		}
 
 	default:
 		log.Println("дата не обновилась: не будем ничего делать")
 		s.tgbot.Log("дата не обновилась: не будем ничего делать")
+
 		return fmt.Errorf("дата не обновилась: не будем ничего делать")
 	}
 
-	if err := s.imgGen.GenerateImage(debtValue, imgFilename); err != nil {
+	if err := s.imgGen.GenerateImage(newDebt, imgFilename); err != nil {
 		fmt.Println("img generation error occured:", err)
 		s.tgbot.Log(err.Error())
+
 		return fmt.Errorf("img generation error occured: %w", err)
 	}
 
-	if err := s.tgbot.SendDebtImg(imgFilename); err != nil {
+	if err := s.tgbot.SendDebtImg(imgFilename, diffInfo); err != nil {
 		fmt.Println("error sending img to channel:", err)
 		s.tgbot.Log(err.Error())
+
 		return fmt.Errorf("error sending img to channel: %w", err)
 	}
 
-	if err := s.cache.UpdateDate(debtDate); err != nil {
+	if err := s.cache.UpdateData(newDebt, newDate); err != nil {
 		fmt.Println("updating date error occured:", err)
 		s.tgbot.Log(err.Error())
+		s.cache.Erase()
+
 		return fmt.Errorf("updating date error occured: %w", err)
 	}
 
