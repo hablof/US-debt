@@ -16,7 +16,7 @@ import (
 )
 
 const (
-	interval = 4 * time.Hour
+	interval = 15 * time.Minute
 )
 
 func main() {

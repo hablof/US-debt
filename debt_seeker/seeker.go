@@ -57,7 +57,7 @@ type DebtSeeker struct {
 }
 
 func NewSeeker() *DebtSeeker {
-	c := http.Client{Timeout: 5 * time.Second}
+	c := http.Client{Timeout: 15 * time.Second}
 
 	return &DebtSeeker{
 		c:        &c,
@@ -67,7 +67,7 @@ func NewSeeker() *DebtSeeker {
 
 func (ds *DebtSeeker) FetchData() error {
 
-	ctx, cf := context.WithTimeout(context.Background(), 3*time.Second)
+	ctx, cf := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cf()
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, usTreasuryEndpoint, nil)

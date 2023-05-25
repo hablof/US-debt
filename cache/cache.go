@@ -7,6 +7,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/hablof/US-debt/model"
 )
 
 const (
@@ -47,8 +49,8 @@ func (Cache) GetData() (uint64, time.Time, error) {
 	return uint64(lastDebt), lastDate, nil
 }
 
-func (Cache) UpdateData(debt uint64, date time.Time) error {
-	b := []byte(strconv.FormatUint(debt, 10) + " " + date.Format(dateLayout)) // "31462147316778 2023-05-19"
+func (Cache) UpdateData(data model.Debt) error {
+	b := []byte(strconv.FormatUint(data.Amuont, 10) + " " + data.Date.Format(dateLayout)) // "31462147316778 2023-05-19"
 	return os.WriteFile(cacheFilename, b, 0666)
 }
 

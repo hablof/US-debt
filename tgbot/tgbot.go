@@ -12,6 +12,8 @@ import (
 )
 
 const (
+	debugPosting = false
+
 	tgChannelName  = "@usDebtDaily"
 	tgChannelLogID = -1001988677061
 )
@@ -41,7 +43,9 @@ func NewTgBot() (*TgBot, error) {
 func (t *TgBot) SendDebtImg(path string, diffInfo model.DebtDifference) error {
 	myFile := tgbotapi.FilePath(path)
 	pc := tgbotapi.NewPhotoToChannel(tgChannelName, myFile)
-	// pc := tgbotapi.NewPhoto(tgChannelLogID, myFile)
+	if debugPosting {
+		pc = tgbotapi.NewPhoto(tgChannelLogID, myFile)
+	}
 
 	if diffInfo.Valid {
 		pc.Caption = formatCaption(diffInfo.Value, diffInfo.Grows)

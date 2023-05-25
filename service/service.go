@@ -10,6 +10,9 @@ import (
 
 const (
 	imgFilename = "output.png"
+
+	toSoonHours = 7
+	toLateHours = 22 // actualy 23
 )
 
 type Telegram interface {
@@ -19,7 +22,7 @@ type Telegram interface {
 
 type Cache interface {
 	GetData() (uint64, time.Time, error)
-	UpdateData(debt uint64, date time.Time) error
+	UpdateData(data model.Debt) error
 	Erase() error
 }
 
@@ -38,6 +41,8 @@ type Service struct {
 	ds     DebtSeeker
 	cache  Cache
 	imgGen ImageGenerator
+
+	debtCandidate *model.Debt
 }
 
 func NewService(t Telegram, ds DebtSeeker, c Cache, ig ImageGenerator) Service {
@@ -51,77 +56,101 @@ func NewService(t Telegram, ds DebtSeeker, c Cache, ig ImageGenerator) Service {
 
 func (s *Service) Job() error {
 
-	if err := s.ds.FetchData(); err != nil {
-		log.Println("жаль", err)
-		s.tgbot.Log(err.Error())
+	newDebt := model.Debt{}
 
-		return err
-	}
-
-	newDebt, err := s.ds.GetDebt()
-	if err != nil {
-		log.Println("жаль 2", err)
-		s.tgbot.Log(err.Error())
-
-		return err
-	}
-
-	newDate, err := s.ds.GetDate()
-	if err != nil {
-		log.Println("жаль 3", err)
-		s.tgbot.Log(err.Error())
-
-		return err
-	}
-
-	diffInfo := model.DebtDifference{}
-
-	cachedDebt, cachedDate, cacheErr := s.cache.GetData()
-	switch {
-	case cacheErr != nil:
-		log.Println("не удалось проверить дату!", cacheErr)
-		s.tgbot.Log(cacheErr.Error())
-		diffInfo.Valid = false
-		s.cache.Erase()
-
-	case newDate.After(cachedDate):
-		log.Println("дата обновилась!")
-		diffInfo.Valid = true
-		if newDebt > cachedDebt {
-			diffInfo.Grows = true
-			diffInfo.Value = newDebt - cachedDebt
-		} else {
-			diffInfo.Grows = false
-			diffInfo.Value = cachedDebt - newDebt
+	if s.debtCandidate == nil {
+		// modifies debt
+		if err := s.prepareDebtData(&newDebt); err != nil {
+			return err
 		}
-
-	default:
-		log.Println("дата не обновилась: не будем ничего делать")
-		s.tgbot.Log("дата не обновилась: не будем ничего делать")
-
-		return fmt.Errorf("дата не обновилась: не будем ничего делать")
 	}
 
-	if err := s.imgGen.GenerateImage(newDebt, imgFilename); err != nil {
+	if h, _, _ := time.Now().Clock(); h >= toLateHours || h <= toSoonHours {
+		s.debtCandidate = &newDebt
+		log.Println("готов кандидат на пост, но сейчас не время...")
+		return fmt.Errorf("no shitpost at night please")
+	}
+
+	s.debtCandidate = nil
+
+	if err := s.imgGen.GenerateImage(newDebt.Amuont, imgFilename); err != nil {
 		fmt.Println("img generation error occured:", err)
 		s.tgbot.Log(err.Error())
 
 		return fmt.Errorf("img generation error occured: %w", err)
 	}
 
-	if err := s.tgbot.SendDebtImg(imgFilename, diffInfo); err != nil {
+	if err := s.tgbot.SendDebtImg(imgFilename, newDebt.Diff); err != nil {
 		fmt.Println("error sending img to channel:", err)
 		s.tgbot.Log(err.Error())
 
 		return fmt.Errorf("error sending img to channel: %w", err)
 	}
 
-	if err := s.cache.UpdateData(newDebt, newDate); err != nil {
+	if err := s.cache.UpdateData(newDebt); err != nil {
 		fmt.Println("updating date error occured:", err)
 		s.tgbot.Log(err.Error())
 		s.cache.Erase()
 
 		return fmt.Errorf("updating date error occured: %w", err)
+	}
+
+	return nil
+}
+
+// makes request to API US's treasury and fill unit.
+// Returns error if data fetch failed.
+// Also returns error if fetched date equals cached.
+func (s *Service) prepareDebtData(unit *model.Debt) error {
+	if err := s.ds.FetchData(); err != nil {
+		log.Println("Не удалось получить данные", err)
+		s.tgbot.Log("Не удалось получить данные: " + err.Error())
+
+		return err
+	}
+
+	newDebtValue, err := s.ds.GetDebt()
+	if err != nil {
+		log.Println("Значение долга невалидно:", err)
+		s.tgbot.Log("Значение долга невалидно: " + err.Error())
+
+		return err
+	}
+
+	newDateValue, err := s.ds.GetDate()
+	if err != nil {
+		log.Println("Значение даты невалидно:", err)
+		s.tgbot.Log("Значение даты невалидно:" + err.Error())
+
+		return err
+	}
+
+	unit.Amuont = newDebtValue
+	unit.Date = newDateValue
+
+	cachedDebt, cachedDate, cacheErr := s.cache.GetData()
+	switch {
+	case cacheErr != nil:
+		log.Println("не удалось прочитать кеш:", cacheErr)
+		s.tgbot.Log("не удалось прочитать кеш: " + cacheErr.Error())
+		unit.Diff.Valid = false
+		s.cache.Erase()
+
+	case unit.Date.After(cachedDate):
+		log.Println("дата обновилась!")
+		unit.Diff.Valid = true
+
+		if unit.Amuont > cachedDebt {
+			unit.Diff.Grows = true
+			unit.Diff.Value = unit.Amuont - cachedDebt
+		} else {
+			unit.Diff.Grows = false
+			unit.Diff.Value = cachedDebt - unit.Amuont
+		}
+
+	default:
+		log.Println("дата не обновилась: не будем ничего делать")
+		return fmt.Errorf("дата не обновилась: не будем ничего делать")
 	}
 
 	return nil
