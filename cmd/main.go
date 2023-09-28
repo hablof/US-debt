@@ -27,7 +27,11 @@ func main() {
 		return
 	}
 
-	seeker := debtseeker.NewSeeker()
+	seeker, err := debtseeker.NewSeeker()
+	if err != nil {
+		myBot.Log(err.Error())
+		return
+	}
 
 	s := service.NewService(myBot, seeker, cache.Cache{}, imggen.ImageGenerator{})
 

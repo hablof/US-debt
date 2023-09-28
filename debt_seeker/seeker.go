@@ -4,17 +4,19 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 	"time"
+
+	"gopkg.in/yaml.v3"
 )
 
-const (
-	usTreasuryEndpoint = "https://api.fiscaldata.treasury.gov/services/api/fiscal_service/v2/accounting/od/debt_to_penny"
-	rawParams          = "fields=tot_pub_debt_out_amt,record_date&sort=-record_date&page[size]=1"
-)
+// const (
+// 	usTreasuryEndpoint = "https://api.fiscaldata.treasury.gov/services/api/fiscal_service/v2/accounting/od/debt_to_penny"
+// 	rawParams          = "fields=tot_pub_debt_out_amt,record_date&sort=-record_date&page[size]=1"
+// )
 
 type dataRecord struct {
 	TotalDebt  string `json:"tot_pub_debt_out_amt"`
@@ -40,6 +42,7 @@ func (dr *dataRecord) getDate() (time.Time, error) {
 
 type endpointOutputScheme struct {
 	Data []dataRecord `json:"data"`
+	Err  string       `json:"error"`
 }
 
 // var (
@@ -54,15 +57,35 @@ type endpointOutputScheme struct {
 type DebtSeeker struct {
 	c        *http.Client
 	tempData *dataRecord
+
+	apiEndpoint string `yaml:"api-endpoint"`
+	apiParams   string `yaml:"api-params"`
 }
 
-func NewSeeker() *DebtSeeker {
+func NewSeeker() (*DebtSeeker, error) {
 	c := http.Client{Timeout: 15 * time.Second}
 
-	return &DebtSeeker{
-		c:        &c,
-		tempData: nil,
+	f, err := os.Open("config.yaml")
+	if err != nil {
+		return nil, err
 	}
+	defer f.Close()
+
+	cfg := struct {
+		ApiEndpoint string `yaml:"api-endpoint"`
+		ApiParams   string `yaml:"api-params"`
+	}{}
+
+	if err := yaml.NewDecoder(f).Decode(&cfg); err != nil {
+		return nil, err
+	}
+
+	return &DebtSeeker{
+		c:           &c,
+		tempData:    nil,
+		apiEndpoint: cfg.ApiEndpoint,
+		apiParams:   cfg.ApiParams,
+	}, nil
 }
 
 func (ds *DebtSeeker) FetchData() error {
@@ -70,32 +93,36 @@ func (ds *DebtSeeker) FetchData() error {
 	ctx, cf := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cf()
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, usTreasuryEndpoint, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, ds.apiEndpoint, nil)
 	if err != nil {
-		return err
+		return fmt.Errorf("не удалось создать http-request: %w", err)
 	}
 
-	req.URL.RawQuery = rawParams
+	req.URL.RawQuery = ds.apiParams
 	// req.URL.RawQuery = url.Values(headers).Encode()
 
 	resp, err := ds.c.Do(req)
 	if err != nil {
-		return err
-	}
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return err
+		return fmt.Errorf("не удалось выполнить http-request: %w", err)
 	}
 	defer resp.Body.Close()
 
+	// body, err := io.ReadAll(resp.Body)
+	// if err != nil {
+	// 	return err
+	// }
+
 	var dataSample endpointOutputScheme
-	if err := json.Unmarshal(body, &dataSample); err != nil {
-		return err
+	if err := json.NewDecoder(resp.Body).Decode(&dataSample); err != nil {
+		return fmt.Errorf("не удалось прочитать тело ответа: %w", err)
 	}
 
 	if len(dataSample.Data) == 0 {
 		return fmt.Errorf("no data in response")
+	}
+
+	if dataSample.Err != "" {
+		return fmt.Errorf("some error in fetched data: %s", dataSample.Err)
 	}
 
 	ds.tempData = &dataSample.Data[0]
