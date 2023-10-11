@@ -42,7 +42,7 @@ type Service struct {
 	cache  Cache
 	imgGen ImageGenerator
 
-	debtCandidate *model.Debt
+	// debtCandidate *model.Debt
 }
 
 func NewService(t Telegram, ds DebtSeeker, c Cache, ig ImageGenerator) Service {
@@ -56,22 +56,15 @@ func NewService(t Telegram, ds DebtSeeker, c Cache, ig ImageGenerator) Service {
 
 func (s *Service) Job() error {
 
-	newDebt := model.Debt{}
-
-	if s.debtCandidate == nil {
-		// modifies debt
-		if err := s.prepareDebtData(&newDebt); err != nil {
-			return err
-		}
-	}
-
 	if h, _, _ := time.Now().Clock(); h >= toLateHours || h <= toSoonHours {
-		s.debtCandidate = &newDebt
-		log.Println("готов кандидат на пост, но сейчас не время...")
+		log.Println("no shitpost at night please...")
 		return fmt.Errorf("no shitpost at night please")
 	}
 
-	s.debtCandidate = nil
+	newDebt := model.Debt{}
+	if err := s.prepareDebtData(&newDebt); err != nil {
+		return err
+	}
 
 	if err := s.imgGen.GenerateImage(newDebt.Amuont, imgFilename); err != nil {
 		fmt.Println("img generation error occured:", err)
